@@ -1,0 +1,77 @@
+2024-01-31 13:51:55 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-01-31 13:53:57 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-01-31 13:53:58 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-01-31 13:54:02 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-01-31 13:59:47 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-02-23
+2024-01-31 14:00:04 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-02-11
+2024-01-31 14:00:24 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-01-30
+2024-01-31 14:00:42 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-01-18
+2024-01-31 14:01:01 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-01-15
+2024-01-31 14:01:15 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2019-01-06
+2024-01-31 14:01:33 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2018-12-25
+2024-01-31 14:01:49 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2018-12-13
+2024-01-31 14:02:05 | tmp.WaterFinder:INFO -> Seeking for flood in date: 2018-12-01
+2024-01-31 14:19:45 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-01-31 14:19:45 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-01-31 14:19:46 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-01-31 14:19:47 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-01-31 14:19:51 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-01-31 14:19:52 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-01-31 14:21:17 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-01-31 14:21:17 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-01-31 14:21:17 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-01-31 14:21:18 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-01-31 14:21:19 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-01-31 14:21:19 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-01-31 14:21:19 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-01-31 14:37:25 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:39:09 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-01-31 14:39:18 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:40:26 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:41:07 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:41:36 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:43:53 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 14:43:53 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-01-31 14:43:53 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-01-31 19:25:53 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 19:25:53 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-01-31 19:25:53 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-01-31 19:26:38 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 19:26:44 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-01-31 19:26:45 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-01-31 19:26:45 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 18:25:59 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-02-01 18:25:59 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-02-01 18:25:59 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-02-01 18:26:00 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-02-01 18:26:04 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-02-01 18:26:06 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-02-01 18:26:06 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-02-01 18:26:10 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 18:26:11 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 18:26:12 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 18:26:12 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 18:27:54 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-02-01 18:27:54 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-02-01 18:27:54 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-02-01 18:27:55 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-02-01 18:28:01 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-02-01 18:28:02 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-02-01 18:28:02 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-02-01 18:28:04 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 18:28:05 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 18:28:05 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 18:28:05 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 18:41:25 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-02-01 18:41:25 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-02-01 18:41:26 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-02-01 18:41:26 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-02-01 18:41:33 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-02-01 18:41:35 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-02-01 18:41:35 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-02-01 18:41:41 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 18:41:42 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 18:41:42 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 18:41:42 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 18:54:12 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-02-01 18:54:12 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
