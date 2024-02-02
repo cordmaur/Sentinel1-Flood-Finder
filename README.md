@@ -19,7 +19,7 @@ To address this challenge, the Python package `S1FloodFinder` was developed as a
 
 ### Machine Learning Methodology
 
-The `S1FloodFinder` utilizes a pixel-based Random Forests approach on the `VV` and `VH` polarizations to detect water pixels within a scene. The model was trained using the CNES ALCD Open water masks [1]. The water masks cover distinct regions and weather seasons over France and were originally obtained from the Sentinel 2 imagery. During training phase, these masks were paired to the Sentinel 1 imagery (Figure 2).
+The `S1FloodFinder` utilizes a pixel-based Random Forests approach on the `VV` and `VH` polarizations to detect water pixels within a scene. The model was trained using the CNES ALCD Open water masks [1]. The water masks cover distinct regions and weather seasons over France and were originally obtained from the Sentinel 2 imagery. During training phase, these masks were paired to the Sentinel 1 imagery (Figure 2). The pre-trained model is available on the `/model/RF_Model_v2.joblib` file.
 
 ![image](https://github.com/cordmaur/Sentinel1-Flood-Finder/assets/19617404/d7870222-1065-432c-b4e2-70dc255a901d)
 <div align="center">Figure 2: Example of S1, S2 and water masks  pairing.</div>
@@ -29,6 +29,13 @@ An additional step in delineating floodwater extent involves identifying permane
 
 <img src="https://github.com/cordmaur/Sentinel1-Flood-Finder/assets/19617404/f0767b4f-a56b-43e1-ba14-c3ddb73edd7c" width="1000" height="600" alt="Image description">
 <div align="center">Figure 3: GLobal Surface Water Occurrence and Recurrence layers over Eldorado do Sul - RS rice crops. .</div>
+
+### Results Examples
+The package can create flood maps automatically, without the hassle of image downloading or pre-processing. Figure 4 shows an example of the outputs for Alegrete-RS/Brazil. The time series shows the result of the flood detection for the whole period of imagery available from Sentinel 1, from 2016 to the present. We can notice the major flood occurred on January 2019. These outputs are created automatically and it is explained in the notebooks available in `nbs`. 
+
+<img src="https://github.com/cordmaur/Sentinel1-Flood-Finder/assets/19617404/aada58ee-b128-44ae-845e-de599ed64552" width="900" height="500" alt="Image description">
+<div align="center">Figure 4: Results for Alegrete-RS Jan/2019 flood.</div>
+
 
 ## Prerequisites
 These packages are necessary to run `S1FloodFinder`:
@@ -74,11 +81,10 @@ docker pull cordmaur/planetary:v1
 ## Instalation
 This package is not yet available through `PyPI`, so the installation process can be done by pulling the package directly from github, like so:
 
-`pip install git+http://xxxxxx`
+`pip install git+https://github.com/cordmaur/Sentinel1-Flood-Finder.git@main`
 
 ## Usage
-
-![image](https://github.com/cordmaur/Sentinel1-Flood-Finder/assets/19617404/285b7561-5443-476a-b641-81ae73a301c8)
+For package usage, please refer to the file `nbs/Introduction.ipynb`.
 
 
 ## References
