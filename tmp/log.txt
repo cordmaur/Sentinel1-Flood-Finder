@@ -75,3 +75,34 @@
 2024-02-01 18:41:42 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
 2024-02-01 18:54:12 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
 2024-02-01 18:54:12 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-02-01 18:54:12 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-02-01 18:54:13 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-02-01 18:54:19 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-02-01 18:54:21 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-02-01 18:54:21 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-02-01 18:56:24 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 18:56:24 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 18:56:24 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 18:56:24 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 19:00:10 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:00:10 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:00:10 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:00:10 | tmp.FloodProcessor:INFO -> calculating the extrapolated flood
+2024-02-01 19:04:25 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:04:26 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:04:26 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:07:16 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:07:16 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:07:16 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:07:55 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:07:56 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:07:56 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:09:44 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:09:44 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:09:44 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:23:20 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:23:20 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:23:20 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-01 19:27:43 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-01 19:27:43 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-01 19:27:43 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
