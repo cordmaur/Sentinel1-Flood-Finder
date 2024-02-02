@@ -38,7 +38,19 @@ class FloodProcessor:
         print_log: bool = False,
         log_level: int = logging.DEBUG,
     ):
-        self.image_finder = ImageFinder(subscription_key=subscription_key)
+        """_summary_
+
+        Args:
+            aoi_df (gpd.GeoDataFrame): _description_
+            output_dir (Union[str, Path]): _description_
+            subscription_key (str): _description_
+            time_range (Optional[str], optional): _description_. Defaults to None.
+            lee_size (Optional[int], optional): _description_. Defaults to 7.
+            recurrence_threshold (int, optional): _description_. Defaults to 10.
+            print_log (bool, optional): _description_. Defaults to False.
+            log_level (int, optional): _description_. Defaults to logging.DEBUG.
+        """
+        # self.image_finder = ImageFinder(subscription_key=subscription_key)
         self.output_dir = Path(output_dir)
         self.recurrence_threshold = recurrence_threshold
 
@@ -530,6 +542,6 @@ class FloodProcessor:
     def __repr__(self):
         s = "Flood Processor for place: "
         s += str(self.name)
-        s += "\nVariables: " + str(self.vars.keys())
+        s += "\nVariables: " + str(list(self.vars.keys()))
         s += "\n" + str(self.finder)
         return s
