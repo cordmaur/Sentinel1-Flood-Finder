@@ -55,3 +55,11 @@
 2024-02-02 19:14:47 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
 2024-02-02 19:25:22 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
 2024-02-02 19:25:22 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
+2024-02-02 19:25:22 | tmp.WaterFinder:INFO -> Starting WaterFinder instance for tmp
+2024-02-02 19:25:23 | tmp.WaterFinder:INFO -> Retrieving water recurrence
+2024-02-02 19:25:26 | tmp.WaterFinder:INFO -> Retrieving dates list for the AOI
+2024-02-02 19:25:26 | tmp.FloodProcessor:INFO -> Get water_recurrence from WaterFinder
+2024-02-02 19:25:26 | tmp.FloodProcessor:INFO -> Saving variables locally
+2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> Creating a water extents series
+2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
+2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
