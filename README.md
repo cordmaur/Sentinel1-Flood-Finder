@@ -71,10 +71,10 @@ If you are familiar with docker and prefer conteinerized development, the follow
 docker pull cordmaur/planetary:v1
 ```
 
-<i><b>PS:</b> To learn more about the use of docker for geospatial development, I have a series of posts on <b>GeoCorner (http://geocorner.net)</b> about it here:
-* Why You Should Use Devcontainers for Your Geospatial Development
-* Configuring a Minimal Docker Image for Spatial Analysis with Python
-* Don't Install Python for Data Science. Use Docker Instead!
+<i><b>PS:</b> To learn more about the use of docker for geospatial development, I have a series of posts about this subject on <b>GeoCorner (http://geocorner.net)</b>:
+* [Why You Should Use Devcontainers for Your Geospatial Development](https://www.geocorner.net/post/why-you-should-use-devcontainers-for-your-geospatial-development)
+* [Configuring a Minimal Docker Image for Spatial Analysis with Python](https://www.geocorner.net/post/configuring-a-minimal-docker-image-for-spatial-analysis-with-python)
+* [Don't Install Python (Locally) for Data Science. Use Docker Instead!](https://www.geocorner.net/post/don-t-install-python-for-data-science-use-docker-instead)
 </i>
 
 
