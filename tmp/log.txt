@@ -63,3 +63,5 @@
 2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> Creating a water extents series
 2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> Calculating flood area for each date
 2024-02-02 19:25:33 | tmp.FloodProcessor:INFO -> table.csv exported with water/flood series
+2024-02-06 14:09:41 | tmp.FloodProcessor:INFO -> Creating processor for place: tmp
+2024-02-06 14:09:41 | tmp.FloodProcessor:INFO -> Saving file ../tmp/gdf.geojson
