@@ -1,4 +1,5 @@
 """Urban Areas Module"""
+
 from typing import Union, Tuple, Iterable, Dict
 from pathlib import Path
 import unidecode
@@ -11,8 +12,9 @@ from .utils import calc_aspects_lims
 class UrbanArea:
     """Docstring"""
 
-    def __init__(self, aoi_df: gpd.GeoDataFrame):
+    def __init__(self, aoi_df: gpd.GeoDataFrame, bounds: gpd.GeoDataFrame):
         self.df = aoi_df
+        self.bounds = bounds
 
     @property
     def name(self):
@@ -20,9 +22,19 @@ class UrbanArea:
         return self.df.iloc[0]["NM_MUN"]
 
     @property
-    def bounds(self):
+    def uf(self):
         """Docstring"""
-        return self.df.total_bounds
+        return self.df.iloc[0]["SIGLA"]
+
+    @property
+    def area(self):
+        """Docstring"""
+        return int(self.df["area_km2"].sum())
+
+    # @property
+    # def bounds(self):
+    #     """Docstring"""
+    #     return self.df.total_bounds
 
     @property
     def poly(self) -> Polygon:
@@ -33,6 +45,11 @@ class UrbanArea:
     def json(self) -> Dict:
         """Return the urban area as a GEO-JSON object"""
         return json.loads(self.df.to_json())
+
+    @property
+    def cd_mun(self) -> int:
+        """Return the Municipal Code"""
+        return self.df["CD_MUN"].iloc[0]
 
     def get_folder(self, root: Union[str, Path]):
         """Create a folder to store the results of this urban area"""
@@ -46,6 +63,14 @@ class UrbanArea:
         """Plot the GeoDataFrame"""
         return self.df.plot(**kwargs)
 
+    @property
+    def total_area(self) -> float:
+        """Calculate the total area of the bounds in km2"""
+        return self.bounds.to_crs("esri:54034").area[0] * 1e-6
+
+    def __repr__(self):
+        return f"Urban area for: {self.name}"
+
 
 class UrbanAreas:
     """
@@ -54,9 +79,10 @@ class UrbanAreas:
     If using another shapefile format, refer directly to the `calc_aspects_lims` from `utils.py`
     """
 
-    def __init__(self, urban_areas_shp: Union[str, Path]):
+    def __init__(self, urban_areas_shp: Union[str, Path], crs: str = "epsg:4326"):
         self.urban_areas_path = Path(urban_areas_shp)
-        self.urban_areas = gpd.read_file(urban_areas_shp).to_crs("epsg:4326")
+        self.crs = crs
+        self.urban_areas = gpd.read_file(urban_areas_shp).to_crs(crs)
 
         UrbanAreas.update_area(self.urban_areas)
 
@@ -84,11 +110,16 @@ class UrbanAreas:
             return df
 
     def get_urban_area(
-        self, city: Union[int, str], area_factor: float, figsize: Tuple[int, int]
+        self,
+        city: Union[int, str],
+        area_factor: float,
+        figsize: Tuple[int, int],
+        min_area: int = 50,
     ):
         """
         This function tries zoom-in into the 'most important' urban area of the municipality
         Area factor is a value between 0 and 1 that specifies how much of the city must be included
+        `min_area` is the minimum area in km2 to be considered in the output frame
         """
 
         # first, get the desired city
@@ -114,12 +145,23 @@ class UrbanAreas:
         xlim, ylim = calc_aspects_lims(aoi_df, aspect=aspect, percent_buffer=0.05)
 
         # get the bounds as a Shapely polygon
-        bounds = box(xlim[0], ylim[0], xlim[1], ylim[1])
+        bounds = gpd.GeoDataFrame(
+            geometry=[box(xlim[0], ylim[0], xlim[1], ylim[1])]
+        ).set_crs(self.crs)
+        bounds = bounds.to_crs("esri:54034")
+
+        if (bounds.area[0] * 1e-6) < min_area:
+            # calculate the scale to be applied to the bounds
+            scale = (min_area / (bounds.area[0] * 1e-6)) ** 0.5
+            bounds = bounds.scale(scale, scale)
+
+        # return bounds to original CRS
+        bounds = bounds.to_crs(self.crs)
 
         aoi_df = city_df.clip(bounds)
         UrbanAreas.update_area(aoi_df)
 
-        return UrbanArea(aoi_df)
+        return UrbanArea(aoi_df, bounds)
 
     def iter_cities(self, area_factor: float, figsize: Tuple[int, int]) -> Iterable:
         """Return an iterable object to be used in a for loop"""
@@ -142,10 +184,21 @@ class UrbanAreas:
 class UrbanAreasIterator:
     """Iterator through the cities"""
 
-    def __init__(self, uas: UrbanAreas, area_factor: float, figsize: Tuple[int, int]):
+    def __init__(
+        self,
+        uas: UrbanAreas,
+        area_factor: float,
+        figsize: Tuple[int, int],
+    ):
         self.idx = 0
         self.uas = uas
-        self.items = self.uas.urban_areas["CD_MUN"].astype("int").unique().tolist()
+        # self.items = self.uas.urban_areas["CD_MUN"].astype("int").unique().tolist()
+
+        areas = self.uas.urban_areas[["CD_MUN", "AREA_KM2"]].groupby(by="CD_MUN").sum()
+        self.items = (
+            areas.sort_values("AREA_KM2", ascending=False).index.astype("int").to_list()
+        )
+
         self.area_factor = area_factor
         self.figsize = figsize
 

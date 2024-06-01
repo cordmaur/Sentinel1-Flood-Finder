@@ -1,4 +1,5 @@
 """Docstring"""
+
 from typing import List, Optional, Tuple
 import xml.etree.ElementTree as ET
 
@@ -8,7 +9,6 @@ import pandas as pd
 from pandas import Timedelta
 from scipy.ndimage.filters import uniform_filter
 from scipy.ndimage.measurements import variance
-
 
 import planetary_computer as pc
 import pystac
@@ -83,7 +83,7 @@ class S1Imagery:
     """Docstring"""
 
     # specify the time delta to group the images as one instance
-    TIME_DELTA = Timedelta("12h")
+    TIME_DELTA = Timedelta("24h")
 
     def __init__(
         self,
@@ -92,6 +92,7 @@ class S1Imagery:
         lee_size: Optional[int] = None,
         shape: Optional[Tuple[int, int]] = None,
         noise_thresh: float = 2e-3,
+        group_items: bool = False,
     ):
         """
         The S1Imagery class is responsible for fetching S1Imagery from Planetary Computer.
@@ -103,18 +104,32 @@ class S1Imagery:
             lee_size (Optional[int]): Size of the Lee Filter in pixels. Of it is set to "None"
             the filter is not applied, otherwise it is applied automatically during the fetching
             noise_thresh (float): Values below this threshold will be masked as no-data
+            group_items (bool): if True, will create a cube with all items and calculate the median
         """
         self.items = items
         self.aoi = aoi
         self.lee_size = lee_size
-        self.shape = shape
         self.noise_tresh = noise_thresh
-        self.df = S1Imagery.create_grouped_df(items, S1Imagery.TIME_DELTA)
+        self.df, self.groups = S1Imagery.create_grouped_df(
+            items, S1Imagery.TIME_DELTA, group_items=group_items
+        )
+
+        # create an xarray blank template
+        template = self.get_raw_date(self.dates[0]).sel(band="vv")
+        template.data = np.zeros(template.shape, dtype="uint8")
+
+        if shape is not None:
+            self.shape = shape
+            template = template.rio.reproject(dst_crs=template.rio.crs, shape=shape)
+        else:
+            self.shape = template.shape
+
+        self.template = template
 
     @property
     def dates(self):
         """Return the `dates` available for this AOI"""
-        return self.df["date"].unique()
+        return self.groups["date"].unique()
 
     def plot_date(self, date: str, ax: Optional[plt.Axes] = None, raw: bool = False):
         """Plot a specific date"""
@@ -139,7 +154,7 @@ class S1Imagery:
     @staticmethod
     def false_color(vv, vh):
         """
-        Receives a 2D array and returns a 3D RGB array
+        Receives a 2D array with VV and VH and returns a 3D RGB array
         https://custom-scripts.sentinel-hub.com/custom-scripts/sentinel-1/sar_false_color_visualization/
         """
 
@@ -170,16 +185,35 @@ class S1Imagery:
     def __len__(self):
         return len(self.dates)
 
-    def get_raw_date(self, date: str):
-        """_summary_
+    def get_items_by_date(self, date: str) -> list:
+        """Return the Stac Items for a specific GROUP date
 
         Args:
-            date (str): _description_
+            date (str): Reference group date
 
         Returns:
-            _type_: _description_
+            list: list of Stac Items
         """
-        items = self.df.query(f"date == '{date}'")["item"].to_list()
+        min_datetime = self.groups.query(f"date == '{date}'")["min_datetime"][0]
+        max_datetime = self.groups.query(f"date == '{date}'")["max_datetime"][0]
+
+        items = self.df[
+            (self.df["datetime"] >= min_datetime)
+            & (self.df["datetime"] <= max_datetime)
+        ]["item"].to_list()
+
+        return items
+
+    def get_raw_date(self, date: str) -> xr.DataArray:
+        """Get the date without any modification (raw)
+
+        Args:
+            date (str): Date as string
+
+        Returns:
+            xr.DataArray: DataArray with the raw image
+        """
+        items = self.get_items_by_date(date)
 
         cube = stackstac.stack(
             items=items, bounds_latlon=self.aoi.bounds, epsg=4326, chunksize=4096
@@ -189,19 +223,19 @@ class S1Imagery:
         # https://github.com/microsoft/PlanetaryComputer/issues/307
         cube = cube.where(cube.sel(band="vv") > self.noise_tresh)
 
-        cube = cube.median(dim="time")
+        cube = cube.median(dim="time").rio.write_crs(cube.rio.crs)
         return cube
 
-    def __getitem__(self, idx: str):
-        # items = self.df.query(f"date == '{idx}'")["item"].to_list()
+    def __getitem__(self, idx: str) -> xr.DataArray:
+        """Get the image in the given date. The raw data will be filtered for speckle.
 
-        # cube = stackstac.stack(
-        #     items=items, bounds_latlon=self.aoi.bounds, epsg=4326, chunksize=4096
-        # ).astype("float32")
+        Args:
+            idx (str): idx is the date as string
 
-        # cube = cube.median(dim="time")
-
-        cube = self.get_raw_date(idx)
+        Returns:
+            xr.DataArray: DataArray with the VV and VH bands
+        """
+        cube = self.get_raw_date(idx).compute()
 
         if self.lee_size is not None:
             # Calculate the reference
@@ -215,14 +249,16 @@ class S1Imagery:
         if self.shape:
             cube = cube.rio.reproject(dst_crs="epsg:4326", shape=self.shape)
 
-        return cube
+        return cube.compute()
 
     def __iter__(self):
         for date in self.dates:
             yield date  # , self[date]
 
     @staticmethod
-    def create_grouped_df(items: List[pystac.Item], time_delta: Timedelta):
+    def create_grouped_df(
+        items: List[pystac.Item], time_delta: Timedelta, group_items: bool = False
+    ):
         """Create a dataframe with the items and a group column, specified as the time smaller
         than the given time_delta.
 
@@ -236,21 +272,36 @@ class S1Imagery:
         df = pd.DataFrame(
             {item.id: {"item": item, "datetime": item.datetime} for item in items}
         ).T
-        df["datetime"] = pd.to_datetime(df["datetime"])
-        df["dt"] = df["datetime"] - df.shift(-1)["datetime"]
-        df["delta"] = df["dt"] > time_delta
-        df["group"] = (df["delta"]).cumsum().shift(1)
-        df.iloc[0, -1] = 0
-        df["group"] = df["group"].astype("int")
 
-        # create the mean datetime as key to the group
-        groups = df[["datetime", "group"]].groupby("group").mean()
-        df["date"] = df["group"]
-        groups["date"] = groups["datetime"].dt.strftime("%Y-%m-%d")
+        # in group_items, all items will be grouped in one cube
+        if group_items:
+            df["min_datetime"] = df["datetime"].min()
+            df["max_datetime"] = df["datetime"].max()
+            df["mean_datetime"] = df["datetime"].mean()
 
-        df["date"] = df["date"].replace(groups["date"].to_dict())
+        # otherwise use a sliding window for each row and calculate the mean datetime for the "window"
+        # this datetime will be used in the group by clause
+        else:
+            for idx, row in df.iterrows():
+                start_date = row["datetime"] - time_delta
+                end_date = row["datetime"] + time_delta
 
-        return df
+                subframe = df[
+                    (df["datetime"] >= start_date) & (df["datetime"] <= end_date)
+                ]
+
+                df.loc[idx, "min_datetime"] = subframe["datetime"].min()
+                df.loc[idx, "max_datetime"] = subframe["datetime"].max()
+                df.loc[idx, "mean_datetime"] = subframe["datetime"].mean()
+
+        groups = df.groupby("mean_datetime")[["min_datetime", "max_datetime"]].first()
+        groups["date"] = groups.index.strftime("%Y-%m-%d")
+
+        # count the number of scenes in each group
+        counter = df.groupby("mean_datetime")["item"].count()
+        groups["items"] = counter
+
+        return df, groups
 
     # defining a function to apply lee filtering on S1 image
     @staticmethod
@@ -297,8 +348,8 @@ class ImageFinder:
     """This class is responsible for querying and fetching imagery data from the planetary
     computer"""
 
-    def __init__(self, subscription_key):
-        pc.set_subscription_key(subscription_key)
+    def __init__(self):
+        # pc.set_subscription_key(subscription_key)
 
         self.catalog = pystac_client.Client.open(
             "https://planetarycomputer.microsoft.com/api/stac/v1",
@@ -321,6 +372,7 @@ class ImageFinder:
         aoi: Polygon,
         time_range: Optional[str] = None,
         lee_size: Optional[int] = 7,
+        group_items: bool = False,
         shape: Optional[Tuple[int, int]] = None,
     ) -> S1Imagery:
         """
@@ -328,6 +380,8 @@ class ImageFinder:
         Args:
             aoi (Polygon): Area of interest. It should be a shapely Polygon.
             time_range (str): The period of time to search for images (e.g., 2016-01-01/2020-02-20)
+            group_items (bool): if True, will create a cube with all items and calculate the median
+
         """
 
         search = self.catalog.search(
@@ -336,4 +390,4 @@ class ImageFinder:
 
         items = list(search.item_collection())
 
-        return S1Imagery(items, aoi, lee_size, shape)
+        return S1Imagery(items, aoi, lee_size, shape, group_items=group_items)

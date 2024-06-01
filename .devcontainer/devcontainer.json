@@ -28,11 +28,12 @@
 				"ms-python.pylint",
 				"ms-python.vscode-pylance",
 				"ms-python.black-formatter",
-				"njpwerner.autodocstring"
+				"njpwerner.autodocstring",
+				"amazonwebservices.aws-toolkit-vscode",
 			]
 		}
 	},
-	"postCreateCommand": "pip install scikit-learn==1.2.2",
+	"postCreateCommand": "pip install scikit-learn==1.2.2 owslib; pip install -e .",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

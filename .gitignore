@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.pptx
 *.key
+tmp/
 
 # C extensions
 *.so

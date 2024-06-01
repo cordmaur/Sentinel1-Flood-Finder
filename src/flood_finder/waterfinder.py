@@ -2,10 +2,19 @@
 Implements the FloodSeeker class
 This module requires scikit-learn == 1.2.2
 """
+
+from collections.abc import Iterable
+from io import BytesIO
+from time import sleep
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 from pathlib import Path
+
 import joblib
+from owslib.wms import WebMapService
+from PIL import Image
+
+import numpy as np
 
 from sklearn.ensemble import RandomForestRegressor
 
@@ -16,31 +25,34 @@ import xarray as xr
 import rioxarray as xrio  # pylint: disable=unused-import
 from .imagery import ImageFinder
 from .logging import create_logger
-from .utils import open_tif_as_dset
 
 
 class WaterFinder:
     """Docstring"""
 
+    GFM_URL = "https://geoserver.gfm.eodc.eu/geoserver/gfm/wms"
+    GFM_LAYER = "observed_flood_extent"
+
     def __init__(
         self,
         output_path: Union[str, Path],
         aoi: Polygon,
-        subscription_key: str,
+        group_items: bool = False,
         time_range: Optional[str] = None,
         lee_size: Optional[int] = 7,
         print_log: bool = False,
         log_level: int = logging.DEBUG,
         max_nodata: float = 0.05,
+        shape: Optional[Tuple[int, int]] = None,
     ):
         """
         WaterFinder is a class that creates water masks from S1 imagery pulled from
         the Microsoft Planetary Computer
 
         Args:
-            output_path (Union[str, Path]): Folder to write the masks
+            output_path (Union[str, Path]): Folder to write the masks to
             aoi (Polygon): Area of Interest as a Shapely Polygon
-            subscription_key(str): Planetary computer subscription key
+            group_items (bool): if True, will create a cube with all items and calculate the median
             time_range (Optional[str], optional): Time frame as a string
                 For example, '2016/2020' or '2020-01-01/2020-02-01', etc..
                 If None, the whole period is considered: Defaults to None.
@@ -71,31 +83,22 @@ class WaterFinder:
 
         self.logger.info("Starting WaterFinder instance for %s", self.output_path.name)
 
-        self.image_finder = ImageFinder(subscription_key=subscription_key)
-
-        self.logger.info("Retrieving water recurrence")
-        self.recurrence = self.image_finder.get_water_baseline(
-            aoi=aoi, asset="recurrence"
-        ).compute()
+        self.image_finder = ImageFinder()
 
         self.logger.info("Retrieving dates list for the AOI")
         self.s1imagery = self.image_finder.get_s1_images(
             aoi=aoi,
             time_range=time_range,
             lee_size=lee_size,
-            shape=self.recurrence.shape,
+            shape=shape,
+            group_items=group_items,
         )
 
-        if (self.output_path / "waters.tif").exists():
-            self.waters = open_tif_as_dset(self.output_path / "waters.tif")
-            self.waters = self.adjust_coords(self.waters)
-
-        else:
-            self.waters = xr.Dataset()
+        self.waters = xr.Dataset().rio.set_crs("epsg:4326")
 
     def adjust_coords(self, da: xr.DataArray) -> xr.DataArray:
         """
-        Make sure the array has the same coords as self.permanent_water
+        Make sure the array has the same coords as imagery template
         Additionally, get rid of unimportant coords
         Args:
             da (xr.DataArray): DataArray to be ajusted
@@ -103,7 +106,8 @@ class WaterFinder:
         Returns:
             xr.DataArray: DataArray with the same coordinates as permanent_water
         """
-        da = da.assign_coords({"x": self.recurrence.x, "y": self.recurrence.y})
+        template = self.s1imagery.template
+        da = da.assign_coords({"x": template.x, "y": template.y})
         drop_vars = set(da.coords.keys())
         drop_vars = drop_vars - {"x", "y", "epsg"}
         da = da.drop_vars(drop_vars)
@@ -116,40 +120,218 @@ class WaterFinder:
         s += " / " + self.s1imagery.dates[0]
         return s
 
+    def find_water_in_dates(
+        self,
+        dates: list,
+        model_path: Optional[Union[str, Path]] = None,
+        use_gfm: bool = False,
+    ):
+        """
+        Main loop to find water in the specified dates
+        Result is stored in the `self.waters`
+        """
+        if not isinstance(dates, Iterable):
+            raise ValueError("Dates argument should be an Iterable obj")
+
+        if len(dates) > 0:
+            if use_gfm:
+                wms_t = WebMapService(WaterFinder.GFM_URL)
+                seek_fn = self.seek_gfm
+                args = {"wms_t": wms_t}
+
+            else:
+                if model_path is None:
+                    raise ValueError("You must pass a RF model path")
+
+                classifier = joblib.load(model_path)
+                seek_fn = self.seek
+                args = {"classifier": classifier}
+
+            # loop through the dates
+            for i, date in enumerate(tqdm(dates, desc=self.output_path.stem)):
+                try:
+                    # call the corresponding function
+                    self.waters[date] = seek_fn(date, **args)
+
+                except Exception as e:  # pylint: disable=W0718
+                    self.logger.warning(e)
+
+                if (i % 10 == 9) or (i == len(dates) - 1):
+                    self.logger.info(  # pylint: disable=W1203
+                        f"Saving waters.nc. i={i}"
+                    )
+
+                    encoding = {
+                        var: {"dtype": "uint8", "zlib": True}
+                        for var in self.waters.data_vars.keys()
+                    }
+                    self.waters.to_netcdf(
+                        self.output_path / "waters.nc", encoding=encoding
+                    )
+
+        else:
+            print("No dates to classify")
+
+    def find_water_in_date(
+        self,
+        date: str,
+        model_path: Optional[Union[str, Path]] = None,
+        use_gfm: bool = True,
+    ) -> xr.DataArray:
+        """
+        Find water in a single date
+
+        Args:
+            date (str): Date as string
+            model_path (Optional[Union[str, Path]]): Path to the RF model
+            use_gfm (bool, optional): If True, will use the GFM WMS. Defaults to True.
+
+        Returns:
+            xr.DataArray: Water mask for the given date
+        """
+        # check if the date is available
+        if date not in self.s1imagery.dates:
+            raise ValueError(f"Date {date} is not available")
+
+        # call the corresponding function
+        if use_gfm:
+            wms_t = WebMapService(WaterFinder.GFM_URL)
+            seek_fn = self.seek_gfm
+            args = {"wms_t": wms_t}
+
+        else:
+            if model_path is None:
+                raise ValueError("You must pass a RF model path to classify water")
+
+            classifier = joblib.load(model_path)
+            seek_fn = self.seek
+            args = {"classifier": classifier}
+
+        return seek_fn(date, **args)
+
     def find_water(
-        self, model_path: Optional[Union[str, Path]] = None, resume: bool = True
+        self,
+        model_path: Optional[Union[str, Path]] = None,
+        use_gfm: bool = True,
+        resume: bool = True,
     ):
         """
         Find water for the desired period. If resume==True, it will not override
         any previous detection.
         """
-        classifier = None
 
-        for i, date in enumerate(tqdm(self.s1imagery.dates)):
-            if not resume or date not in self.waters:
-                if classifier is None:
-                    if model_path is None:
-                        raise ValueError("A model is required to classify pixels")
-                    classifier = joblib.load(model_path)
+        # load previous waters.nc if it exists and if resume is True
+        if resume and (self.output_path / "waters.nc").exists():
+            self.logger.info("Resuming from previous waters.nc file")
+            self.waters = xr.open_dataset(
+                self.output_path / "waters.nc", mask_and_scale=False
+            ).compute()
+            self.waters = self.waters.rio.write_crs("epsg:4326")
 
-                try:
-                    self.waters[date] = self.seek(date, classifier)
-                except Exception:  # pylint: disable=W0718
-                    self.logger.warning(  # pylintL disable=W1203
-                        f"Date {date} has nodata greater than {100*self.max_nodata:.1f}% "
-                    )
+            # Close the connection
+            self.waters.close()
 
-                if i % 10 == 9:
-                    self.waters = self.waters.rio.set_crs("epsg:4326").astype("int")
-                    self.waters.rio.to_raster(
-                        self.output_path / "waters.tif", compress="DEFLATE"
-                    )
+            # check for the last ingested date
+            dates = sorted(list(self.waters.data_vars.keys()))
+            if len(dates) > 0:
+                last_date = dates[-1]
+                self.logger.info("Resuming from date %s", last_date)
 
-        if classifier is not None:
-            self.waters = self.waters.rio.set_crs("epsg:4326").astype("int")
-            self.waters.rio.to_raster(
-                self.output_path / "waters.tif", compress="DEFLATE"
+            else:
+                last_date = ""
+
+            # define the dates to loop through
+            loop_dates = self.s1imagery.dates[self.s1imagery.dates > last_date]
+
+        else:
+            self.waters = xr.Dataset().rio.set_crs("epsg:4326")
+            loop_dates = self.s1imagery.dates
+
+        if len(loop_dates) > 0:
+            return self.find_water_in_dates(
+                model_path=model_path, dates=loop_dates, use_gfm=use_gfm
             )
+
+        else:
+            print("No date left to process. Check self.waters")
+
+    @staticmethod
+    def get_wms_img(
+        time_range: str, layer: str, bbox: tuple, size: tuple, wms_t: WebMapService
+    ) -> Image:
+        """_summary_
+
+        Args:
+            time_range (str): _description_
+            layer (str): _description_
+            bbox (tuple): _description_
+            size (tuple): _description_
+            wms_t (WebMapService): _description_
+
+        Returns:
+            Image: _description_
+        """
+
+        retries = 5
+
+        while retries:
+            try:
+                wms_request = wms_t.getmap(
+                    layers=[layer],
+                    styles="",
+                    srs="EPSG:4326",
+                    bbox=bbox,
+                    size=size,
+                    time=time_range,
+                    format="image/png",
+                )
+                obj = BytesIO(wms_request.read())
+                img = Image.open(obj)
+                return img
+
+            except Exception as e:  # pylint: disable=W0718
+                sleep(1)
+                retries = retries - 1
+                print(f"Error fetching {time_range}. {retries} retries left\n{e}")
+
+                # restart the connection
+                wms_t = WebMapService(wms_t.url)
+
+    def seek_gfm(self, date: str, wms_t: WebMapService) -> xr.DataArray:
+        """_summary_
+
+        Args:
+            date (str): _description_
+
+        Returns:
+            xr.DataArray: XArray containing the flood pixels
+        """
+
+        self.logger.info("Seeking for GFM flood in date: %s", date)
+
+        shape = self.s1imagery.shape
+        img = WaterFinder.get_wms_img(
+            time_range=date,
+            layer=WaterFinder.GFM_LAYER,
+            size=(shape[1], shape[0]),
+            bbox=self.s1imagery.aoi.bounds,
+            wms_t=wms_t,
+        )
+        sleep(0.5)
+
+        if img is None:
+            raise ValueError(f"Image for {date} not retrieved.")
+
+        array = np.array(img).astype("uint8")
+        if len(array.shape) == 3:
+            raise ValueError(f"No data for date {date}.")
+
+        water = self.s1imagery.template.copy()
+        water.data = array
+
+        water = self.adjust_coords(water).astype("uint8").rio.write_nodata(0)
+
+        return water
 
     def seek(self, date: str, classifier) -> xr.DataArray:
         """_summary_
@@ -160,7 +342,7 @@ class WaterFinder:
         Returns:
             xr.DataArray: XArray containing the flood pixels
         """
-        self.logger.info("Seeking for flood in date: %s", date)
+        self.logger.info("Seeking for water in date: %s", date)
 
         # get the corresponding image
         s1img = self.s1imagery[date]
@@ -170,8 +352,8 @@ class WaterFinder:
         if nodata_perc > self.max_nodata:
             raise ValueError(f"Image has {nodata_perc*100:.1f}% no data values")
 
-        water = WaterFinder.predict_water(classifier, s1img, thresh=0.5)
-        water = self.adjust_coords(water).astype("int").rio.write_nodata(0)
+        water = WaterFinder.predict_water(classifier, s1img, thresh=0.45)
+        water = self.adjust_coords(water).astype("uint8").rio.write_nodata(0)
 
         # flood_arr = (water.data - self.permanent_water.astype("int").data) == 1
 
@@ -224,24 +406,3 @@ class WaterFinder:
         s += f"Available dates: {len(self.s1imagery)}\n"
         s += f"Water detected dates: {len(self.waters)}"
         return s
-
-
-# def calc_floods(clf, ref_img, imgs, bounds, crs, lee_size):
-
-#     baseline = calc_baseline(ref_img, clf, bounds, crs, lee_size)
-
-#     floods = []
-#     preds = []
-#     for i, img in enumerate(imgs):
-
-#         actual = predict_water(clf, img, thresh=0.5, lee_size=lee_size)
-#         flooded = (actual.astype('int') - baseline.astype('int')) == 1
-
-#         # clean the prediction
-#         kernel = skimage.morphology.square(5)
-#         flooded.data = skimage.morphology.opening(flooded.data, footprint=kernel)
-
-#         floods.append(flooded)
-#         preds.append(actual)
-
-#     return floods, preds, baseline

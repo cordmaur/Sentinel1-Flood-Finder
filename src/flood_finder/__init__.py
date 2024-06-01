@@ -2,6 +2,10 @@
 
 import warnings
 
+from .imagery import ImageFinder, S1Imagery
+from .waterfinder import WaterFinder
+
+
 # Filter out warnings from specific module
 warnings.filterwarnings("ignore", category=UserWarning, module="stackstac")
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="dask")

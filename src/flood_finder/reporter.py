@@ -2,10 +2,11 @@
 Implements the ProcessorReporter class
 """
 
-from typing import Tuple
+from typing import Tuple, Optional
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
+import geopandas as gpd
 
 from PyPDF2 import PdfMerger
 import contextily as cx
@@ -24,9 +25,17 @@ from .utils import fig2pdf
 class ProcessorReporter:
     """Docstring"""
 
-    def __init__(self, processor: FloodProcessor, title: str):
+    def __init__(
+        self,
+        processor: FloodProcessor,
+        title: str,
+        flood_threshold: float = 1,  # 1km2 = 100ha
+        aoi_df: Optional[gpd.GeoDataFrame] = None,
+    ):
         self.processor = processor
         self.title = title
+        self.aoi_df = aoi_df
+        self.flood_threshold = flood_threshold
 
     def create_context_page(self, figsize: Tuple[int, int]):
         """Create the page with the context for the place
@@ -83,6 +92,11 @@ class ProcessorReporter:
         # Customize colorbar properties as needed
         cbar.set_label("Water Recurrence (%)")  # Replace with your label
 
+        # plot the area of interest, if available
+        if self.aoi_df is not None:
+            self.aoi_df.plot(ax=axs[0], facecolor="none", edgecolor="white")
+            self.aoi_df.plot(ax=axs[1], facecolor="red", edgecolor="red", alpha=0.2)
+
         mpl.use(current_backend)
         return fig
 
@@ -95,31 +109,45 @@ class ProcessorReporter:
 
         df = self.processor["data_table"]
 
-        flood_threshold = 0.5  # km2 = 50ha
-        num_floods = (df["Flood area"] > flood_threshold).sum()
+        num_floods = (df["Flood area"] > self.flood_threshold).sum()
 
-        urban_area = self.processor["aoi_df"].to_crs("ESRI:54034").area.sum() * 1e-6
+        # if an area of interest is provided, calculate its area in km^2
+        if self.aoi_df is not None:
+            urban_area = self.aoi_df.to_crs("ESRI:54034").area.sum() * 1e-6
+            urban_area = f"{urban_area:.2f}"
+
+            # additionally, calculate the portion of the AOI that was flooded
+            # the value is converted to ha
+            max_flood = self.processor["max_flood"].rio.set_crs("epsg:4326")
+            urban_flooded = max_flood.rio.clip(self.aoi_df.geometry)
+            urban_flooded = float(urban_flooded.sum()) * 30 * 30 * 1e-6 * 100
+            urban_flooded = f"{urban_flooded:.2f}"
+
+        else:
+            urban_area = " - "
+            urban_flooded = " - "
+
         total_area = (
             box(*self.processor["aoi_df"].to_crs("esri:54034").total_bounds).area * 1e-6
         )
 
-        if "vulnerable" in self.processor.vars:
-            vulnerable_area = int(self.processor["vulnerable"].sum()) * 900 * 1e-6
-            urban_vul = int(self.processor["urban_vul"].sum()) * 900 * 1e-6
-        else:
-            vulnerable_area = 0
-            urban_vul = 0
+        # if "vulnerable" in self.processor.vars:
+        #     vulnerable_area = int(self.processor["vulnerable"].sum()) * 900 * 1e-6
+        #     urban_vul = int(self.processor["urban_vul"].sum()) * 900 * 1e-6
+        # else:
+        #     vulnerable_area = 0
+        #     urban_vul = 0
 
         data = {
             "Localidade": self.processor.name,
             "Período": self.processor.finder.dates_range,
             "Imagens disponíveis": len(self.processor.finder.s1imagery),
-            "Area urbana (km^2)": f"{urban_area:.2f}",
+            "Area urbana (km^2)": urban_area,
             "Area total monitorada (km^2)": f"{total_area:.2f}",
-            "Limiar inundação (ha)": f"{flood_threshold * 100}",
+            "Limiar inundação (ha)": f"{self.flood_threshold * 100}",
             "Inundações detectadas": str(num_floods),
-            "Area vulneravel (km^2)": f"{vulnerable_area:.2f}",
-            "Área urbana vulnerável (km^2)": f"{urban_vul:.2f}",
+            # "Area vulneravel (km^2)": f"{vulnerable_area:.2f}",
+            "Área urbana Inundada (ha)": urban_flooded,
             "Máxima cheia: ": f"{df.index.astype('str')[df['Water Extents'].argmax()]}",
         }
 
@@ -158,8 +186,11 @@ class ProcessorReporter:
 
         fig, axs = plt.subplots(2, 1, figsize=(12, 12))
         self.plot_summary_table(ax=axs[0])
-        self.processor["water_series"].plot(ax=axs[1])
-        axs[1].set_title("Water Extension (km^2)")
+        self.processor["data_table"]["Flood area"].plot(ax=axs[1])
+        axs[1].set_title("Flooded Area (km^2)")
+
+        xmin, xmax, _, _ = axs[1].axis()
+        axs[1].hlines(y=self.flood_threshold, xmin=xmin, xmax=xmax, colors="red")
 
         mpl.use(current_backend)
 
@@ -191,6 +222,11 @@ class ProcessorReporter:
         )
         self.processor.plot_var("aoi_df", ax=axs[1], facecolor="none", edgecolor="red")
         axs[1].set_title(f"Maior superfície de água: {high_filling_date}")
+
+        # plot the area of interest, if available
+        if self.aoi_df is not None:
+            self.aoi_df.plot(ax=axs[0], facecolor="none", edgecolor="white")
+            self.aoi_df.plot(ax=axs[1], facecolor="none", edgecolor="white")
 
         mpl.use(current_backend)
 
@@ -236,9 +272,54 @@ class ProcessorReporter:
         axs[0].set_title("Water Recurrence")
         axs[1].set_title("Water Recurrence and maximum detected flood (Red)")
 
+        # plot the area of interest, if available
+        if self.aoi_df is not None:
+            self.aoi_df.plot(ax=axs[0], facecolor="none", edgecolor="white")
+            self.aoi_df.plot(ax=axs[1], facecolor="none", edgecolor="white")
+
         mpl.use(current_backend)
 
         return fig
+
+    def create_all_floods_page(self) -> plt.Figure:
+        """Create the PDF page with the various floods (up to 8)"""
+
+        # first of all get all detected floods
+        floods = self.processor["data_table"]["Flood area"] > self.flood_threshold
+        floods = self.processor["data_table"][floods]
+
+        # then, order by flooded ammount
+        floods = floods.sort_values(["Flood area"], ascending=False)
+
+        # if at least 2 floods, call the function
+        if len(floods) > 1:
+
+            # change Matplotlib backend
+            current_backend = mpl.get_backend()
+            mpl.use("agg")
+
+            fig, axs = plt.subplots(4, 2, figsize=(12, 25))
+
+            for i, date in enumerate(floods.index):
+                if i >= 8:
+                    break
+                self.processor.plot_flood(
+                    ax=axs.reshape(-1)[i],
+                    date=date.strftime("%Y-%m-%d"),
+                    background=cx.providers.Esri.WorldImagery,
+                )
+
+                # plot the area of interest, if available
+                if self.aoi_df is not None:
+                    self.aoi_df.plot(
+                        ax=axs.reshape(-1)[i], facecolor="none", edgecolor="white"
+                    )
+
+            mpl.use(current_backend)
+
+            return fig
+        else:
+            return None
 
     def create_dem_page(self) -> plt.Figure:
         """Create the PDF page with DEM and HAND to be appended for the report"""
@@ -299,6 +380,10 @@ class ProcessorReporter:
 
         fig = self.create_flood_page()
         pdf_merger.append(fig2pdf(fig))
+
+        fig = self.create_all_floods_page()
+        if fig is not None:
+            pdf_merger.append(fig2pdf(fig))
 
         mpl.use(current_backend)
 

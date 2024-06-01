@@ -1,4 +1,5 @@
 """FloodProcessor class"""
+
 from typing import Union, Optional, List
 from pathlib import Path
 import logging
@@ -17,9 +18,9 @@ import contextily as cx
 from xyzservices import TileProvider
 
 # from .utils import adjust_coords
-from .imagery import ImageFinder
 from .logging import create_logger
 from .waterfinder import WaterFinder
+from .imagery import ImageFinder
 
 
 class FloodProcessor:
@@ -30,8 +31,6 @@ class FloodProcessor:
         aoi_df: gpd.GeoDataFrame,
         output_dir: Union[str, Path],
         subscription_key: str,
-        # dem: Union[str, Path],
-        # hand: Union[str, Path],
         time_range: Optional[str] = None,
         lee_size: Optional[int] = 7,
         recurrence_threshold: int = 10,
@@ -41,14 +40,15 @@ class FloodProcessor:
         """_summary_
 
         Args:
-            aoi_df (gpd.GeoDataFrame): _description_
-            output_dir (Union[str, Path]): _description_
-            subscription_key (str): _description_
-            time_range (Optional[str], optional): _description_. Defaults to None.
-            lee_size (Optional[int], optional): _description_. Defaults to 7.
-            recurrence_threshold (int, optional): _description_. Defaults to 10.
-            print_log (bool, optional): _description_. Defaults to False.
-            log_level (int, optional): _description_. Defaults to logging.DEBUG.
+            aoi_df (gpd.GeoDataFrame): Area of Interest as a GeoDataFrame. The total bounds will be considered.
+            output_dir (Union[str, Path]): Folder to save outputs
+            subscription_key (str): MS Planetary Computer subscription key
+            time_range (Optional[str], optional): Single date+time, or a range ('/' separator),
+            formatted to RFC 3339, section 5.6. Use double dots .. for open date ranges. Defaults to None.
+            lee_size (Optional[int], optional): Number of pixels for the spekle filtering. Defaults to 7.
+            recurrence_threshold (int, optional): Recurrence percentage above which the water is considered permanent. Defaults to 10.
+            print_log (bool, optional): If True, outputs the log to the screen. Defaults to False.
+            log_level (int, optional): Log level. Defaults to logging.DEBUG.
         """
         # self.image_finder = ImageFinder(subscription_key=subscription_key)
         self.output_dir = Path(output_dir)
@@ -74,11 +74,18 @@ class FloodProcessor:
 
         # first, let's save the basic variables in the output dir
         self.logger.info("Saving file %s", self.output_dir / "gdf.geojson")
+
+        # create a container for the variables
         self.vars = {}
         aoi_df.to_file(self.output_dir / "gdf.geojson")
         self["aoi_df"] = aoi_df
 
-        # create a container for the variables
+        # Get the water recurrence for the AOI
+        self.logger.info("Retrieving water recurrence")
+        image_finder = ImageFinder(subscription_key=subscription_key)
+        self["recurrence"] = image_finder.get_water_baseline(
+            aoi=box(*aoi_df.total_bounds), asset="recurrence"
+        ).compute()
 
         self.finder = WaterFinder(
             output_path=self.output_dir,
@@ -88,73 +95,11 @@ class FloodProcessor:
             lee_size=lee_size,
             print_log=print_log,
             log_level=log_level,
+            shape=self["recurrence"].shape,
         )
-
-        self.logger.info("Get water_recurrence from WaterFinder")
-        self["recurrence"] = self.finder.recurrence
-
-        # # load HAND and DEM models
-        # self.logger.info("Loading DEM from %s", dem)
-        # self["dem"] = self.load_window(
-        #     dem, self.bounds, shape=self.vars["recurrence"].shape
-        # )
-        # self["dem"] = adjust_coords(self["dem"], self["recurrence"])
-
-        # self.logger.info("Loading HAND from %s", hand)
-        # self.vars["hand"] = self.load_window(
-        #     hand, self.bounds, shape=self.vars["recurrence"].shape
-        # )
-        # self["hand"] = adjust_coords(self["hand"], self["recurrence"])
 
         self.logger.info("Saving variables locally")
         self.save_vars(["recurrence"])
-        # self.save_vars(["recurrence", "dem", "hand"])
-
-        # self.vars["urban_area"] = ua
-        # self.vars["aoi"] = ua.poly
-        # self.vars["dem"] = self.load_window(
-        #     dem, self.bounds, shape=self.vars["waters"].shape[1:3]
-        # )
-        # self.vars["hand"] = self.load_window(
-        #     hand, self.bounds, shape=self.vars["waters"].shape[1:3]
-        # )
-        # self.vars["recurrence"] = self.image_finder.get_water_baseline(
-        #     ua.poly, asset="recurrence"
-        # )
-
-        # self.vars["recurrent_water"] = self.vars["recurrence"].where(
-        #     self.vars["recurrence"] > 10
-        # )
-
-        # water_series = self["waters"].sum(dim=["x", "y"]).to_series()
-        # water_series.index = [parse(date) for date in self["waters"].long_name]
-
-        # self.vars["water_series"] = water_series
-
-        # self.vars["max_water"] = self["waters"][water_series.argmax()]
-        # flood_arr = (
-        #     self["max_water"].where(self["hand"].data < 10).data
-        #     - (self["recurrent_water"] > 0).data
-        # ) == 1
-
-        # # clean the prediction
-        # kernel = skimage.morphology.square(5)
-        # flood_arr = skimage.morphology.opening(flood_arr.compute(), footprint=kernel)
-        # flooded = self["recurrent_water"].copy()
-        # flooded.data = flood_arr
-        # self.vars["max_flood"] = flooded
-
-        # try:
-        #     (
-        #         self.vars["flooded_regions"],
-        #         self.vars["labels"],
-        #         self.vars["dem_steps"],
-        #     ) = self.extrapolate_flood()
-        #     floods = np.stack(self["flooded_regions"])
-        #     self.vars["extrapolated_flood"] = self["dem"].copy()
-        #     self.vars["extrapolated_flood"].data = floods.any(axis=0).astype("int")
-        # except Exception as e:  # pylint: disable=broad-except
-        #     print(e)
 
     @property
     def bounds(self):
@@ -186,9 +131,9 @@ class FloodProcessor:
         """
         self.logger.info("Calculating flood area for each date")
 
-        floods = xr.Dataset()
+        floods = xr.Dataset().rio.set_crs("epsg:4326")
 
-        for date in tqdm(self["water_series"].index.astype("str")):
+        for date in tqdm(self["water_series"].index.astype("str"), desc=self.name):
             flood = self.find_flood(
                 date, recurrence_threshold=recurrence_threshold, use_hand=use_hand
             )
@@ -200,17 +145,25 @@ class FloodProcessor:
         self["data_table"].to_csv(self.output_dir / "table.csv")
         self.logger.info("table.csv exported with water/flood series")
 
-        # fill NaN with 0s
-        floods = floods.fillna(0)
-        floods = floods.rio.set_crs("epsg:4326").astype("int")
-        floods.rio.to_raster(self.output_dir / "floods.tif", compress="DEFLATE")
+        # floods = floods.rio.set_crs("epsg:4326").astype("int")
+
+        # Save the floods as NetCDF
+        # but first, let's drop the unwanted variables
+        drop_vars = set(floods.coords.keys())
+        drop_vars = drop_vars - {"x", "y", "epsg"}
+        floods = floods.drop_vars(drop_vars)
+        self["floods"] = floods
+
+        # now, we create an encoding to compress the variables
+        encoding = {
+            var: {"dtype": "uint8", "zlib": True} for var in floods.data_vars.keys()
+        }
+        floods.to_netcdf(self.output_dir / "floods.nc", encoding=encoding)
 
         # save the max flood
         date_max = self["data_table"]["Flood area"].idxmax()
         self["max_flood"] = floods[date_max.strftime("%Y-%m-%d")]
         self["max_flood"] = self["max_flood"].where(self["max_flood"] > 0)
-
-        self["floods"] = floods
 
         # self.logger.info("calculating the extrapolated flood")
 
@@ -262,6 +215,10 @@ class FloodProcessor:
         """
         water = self["waters"][date]
 
+        # check if both water and recurrence have the same shape
+        if water.shape != self["recurrence"].shape:
+            water = water.rio.reproject(water.rio.crs, shape=self["recurrence"].shape)
+
         if use_hand:
             if "hand" not in self.vars:
                 raise ValueError(
@@ -282,11 +239,12 @@ class FloodProcessor:
         flooded = self["recurrence"].copy()
         flooded.data = flood_arr
 
-        return flooded.where(flooded > 0)
+        return flooded
 
     def find_water(
         self,
         model_path: Optional[Union[str, Path]] = None,
+        use_gfm: bool = True,
         resume: bool = True,
     ):
         """
@@ -294,16 +252,15 @@ class FloodProcessor:
         every date in the time_range. It uses a RandomForests regressor.
 
         Args:
-            model (Union[str, Path]): path of the RandomForests regressor model
-            time_range (str): time range to search for water
-            lee_size (int, optional): Size of lee filter to be applied. Defaults to 7.
-            resume (bool, optional): If True, it will try to recover from previous detection.
+            model_path (Union[str, Path]): path of the RandomForests regressor model
+            use_gfm(book): If True, uses the Flood Maps from GLOFAS
+            resume (bool): If True, it will try to recover from previous detection.
             If False, it will override the `water.tif`. Defaults to True.
         """
 
         self.logger.info("Creating a water extents series")
 
-        self.finder.find_water(model_path=model_path, resume=resume)
+        self.finder.find_water(model_path=model_path, use_gfm=use_gfm, resume=resume)
         self["waters"] = self.finder.waters
 
         water_series = (
@@ -335,20 +292,22 @@ class FloodProcessor:
         self.plot_var("aoi_df", facecolor="none", edgecolor="white", ax=ax)
         self.plot_var("recurrence", cmap="cool_r", add_colorbar=False, ax=ax)
 
-    def plot_vars(self, ax: plt.Axes, dem: str = "dem") -> None:
+    def plot_vars(self, ax: plt.Axes) -> None:
         """Plot all variables in the same Axes"""
-        self.plot_var(dem, ax=ax, cmap="gist_earth", vmin=0, add_colorbar=False)
+        # self.plot_var(dem, ax=ax, cmap="gist_earth", vmin=0, add_colorbar=False)
         # self.plot_var("ref", vmax=1, cmap="Blues", ax=ax, add_colorbar=False)
-        # self.plot_var("max_flood", vmax=1, cmap="brg", ax=ax, add_colorbar=False)
-        self.plot_var("urban_area", facecolor="none", edgecolor="white", ax=ax)
-        self.plot_var("recurrent_water", cmap="cool_r", add_colorbar=False, ax=ax)
+        self.plot_var("aoi_df", facecolor="none", edgecolor="white", ax=ax)
+        self.plot_var("recurrence", cmap="cool_r", add_colorbar=False, ax=ax)
+        self.plot_var("max_flood", vmax=1, cmap="brg", ax=ax, add_colorbar=False)
 
     def plot_flood(
         self,
         date: str,
         ax: Optional[plt.Axes] = None,
         recurrence_threshold: int = 10,
-        background: Optional[Union[str, TileProvider]] = "dem",
+        background: Optional[
+            Union[str, TileProvider]
+        ] = cx.providers.OpenStreetMap.Mapnik,
     ):
         """Plot the flood for a specific date
 
@@ -375,7 +334,14 @@ class FloodProcessor:
             add_colorbar=False,
         )
 
-        flood = self.find_flood(date, recurrence_threshold=recurrence_threshold)
+        # check if the flood array is already processed
+        if "floods" in self.vars and date in self["floods"]:
+            flood = self["floods"][date]
+        else:
+            flood = self.find_flood(date, recurrence_threshold=recurrence_threshold)
+
+        # before plotting, set 0 as nan
+        flood = flood.where(flood > 0)
         flood.plot.imshow(ax=ax, cmap="Reds", zorder=2, add_colorbar=False)
 
         # if the background is DEM or HAND, plot them with cmap gist_earth
