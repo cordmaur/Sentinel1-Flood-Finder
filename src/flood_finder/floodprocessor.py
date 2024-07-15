@@ -30,7 +30,6 @@ class FloodProcessor:
         self,
         aoi_df: gpd.GeoDataFrame,
         output_dir: Union[str, Path],
-        subscription_key: str,
         time_range: Optional[str] = None,
         lee_size: Optional[int] = 7,
         recurrence_threshold: int = 10,
@@ -82,7 +81,7 @@ class FloodProcessor:
 
         # Get the water recurrence for the AOI
         self.logger.info("Retrieving water recurrence")
-        image_finder = ImageFinder(subscription_key=subscription_key)
+        image_finder = ImageFinder()
         self["recurrence"] = image_finder.get_water_baseline(
             aoi=box(*aoi_df.total_bounds), asset="recurrence"
         ).compute()
@@ -90,7 +89,6 @@ class FloodProcessor:
         self.finder = WaterFinder(
             output_path=self.output_dir,
             aoi=self.aoi,
-            subscription_key=subscription_key,
             time_range=time_range,
             lee_size=lee_size,
             print_log=print_log,

@@ -195,7 +195,7 @@ class WaterFinder:
 
         # call the corresponding function
         if use_gfm:
-            wms_t = WebMapService(WaterFinder.GFM_URL)
+            wms_t = WebMapService(WaterFinder.GFM_URL, timeout=120)
             seek_fn = self.seek_gfm
             args = {"wms_t": wms_t}
 
